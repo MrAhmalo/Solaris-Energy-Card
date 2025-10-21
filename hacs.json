@@ -1,5 +1,6 @@
 {
     "name": "Solaris-Energy-Card",
+    "content_in_root": false,
     "render_readme": true,
     "filename": "solaris-card.js"
 }
