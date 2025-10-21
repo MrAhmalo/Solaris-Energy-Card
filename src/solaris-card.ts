@@ -1,6 +1,8 @@
 import { HomeAssistant } from "custom-card-helpers";
 import { css, html, LitElement, TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import houseDay from "./assets/house_day.png";
+import houseNight from "./assets/house_night.png";
 
 // Card configs
 interface CardConfig {
@@ -83,8 +85,8 @@ export class SolarisCard extends LitElement {
     const gridPower = gridImportPower - gridExportPower;
 
     const houseImage = (this.hass.themes as any).darkMode
-      ? "http://192.168.178.99:8080/dist/house_night.png"
-      : "http://192.168.178.99:8080/dist/house_day.png";
+      ? houseNight
+      : houseDay;
 
     return html`
       <ha-card>

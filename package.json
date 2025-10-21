@@ -20,6 +20,7 @@
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-typescript": "^12.1.4",
+    "@rollup/plugin-url": "^8.0.2",
     "http-server": "^14.1.1",
     "rollup": "^4.52.5",
     "typescript": "^5.9.3"
