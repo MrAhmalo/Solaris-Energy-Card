@@ -1,0 +1,31 @@
+{
+  "name": "solaris-card",
+  "version": "0.1.0",
+  "description": "A Modern & Fluent Energy Dashboard Card for Home Assistant",
+  "main": "dist/solaris-card.js",
+  "scripts": {
+    "build": "rollup -c",
+    "serve": "http-server --cors"
+  },
+  "keywords": [
+    "home-assistant",
+    "lovelace",
+    "dashboard",
+    "energy"
+  ],
+  "author": "MrAhmalo",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.1.4",
+    "http-server": "^14.1.1",
+    "rollup": "^4.52.5",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "custom-card-helpers": "^1.9.0",
+    "lit": "^3.3.1"
+  }
+}

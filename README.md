@@ -1,2 +1,2 @@
 # Solaris-Card
-A Modern & Fluent Energy Flow Card for Home Assistant
+A Modern & Fluent Energy Dashboard Card for Home Assistant
