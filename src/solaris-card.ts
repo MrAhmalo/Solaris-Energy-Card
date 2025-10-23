@@ -1,8 +1,11 @@
 import { HomeAssistant } from "custom-card-helpers";
 import { css, html, LitElement, TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import batteryImage from "./assets/battery.png";
 import houseDay from "./assets/house_day.png";
 import houseNight from "./assets/house_night.png";
+import inverterImage from "./assets/inverter.png";
+import "./solaris-card-editor";
 
 // Card configs
 interface CardConfig {
@@ -33,67 +36,133 @@ export class SolarisCard extends LitElement {
     if (!config) {
       throw new Error("Invalid configuration");
     }
+    
+    // Initialize entities object if it doesn't exist
+    if (!config.entities) {
+      config.entities = {
+        pv_power: "",
+        battery_discharge_power: "",
+        battery_charge_power: "",
+        grid_import_power: "",
+        grid_export_power: "",
+        house_consumption: "",
+        battery_soc: "",
+        daily_yield: "",
+        daily_house_load: "",
+        daily_earnings: ""
+      };
+    }
+    
     this._config = config;
   }
 
   // Render function
   protected render(): TemplateResult {
-    if (!this.hass || !this._config.entities) {
-      return html`<ha-card>Keine Entitäten konfiguriert.</ha-card>`;
+    // Return empty card if no config or entities are not configured
+    if (!this._config || !this._config.entities || !this.hass) {
+      return html`
+        <ha-card>
+          <div class="card-content" style="padding: 16px; text-align: center;">
+            <p>Please configure the card entities.</p>
+          </div>
+        </ha-card>
+      `;
     }
 
-    // Fetch entity states
-    const pvPower =
-      parseFloat(this.hass.states[this._config.entities.pv_power].state.replace(",", ".")) || 0;
-    const batteryDischargePower =
-      parseFloat(
-        this.hass.states[this._config.entities.battery_discharge_power].state.replace(",", ".")
-      ) || 0;
-    const batteryChargePower =
-      parseFloat(
-        this.hass.states[this._config.entities.battery_charge_power].state.replace(",", ".")
-      ) || 0;
-    const gridImportPower =
-      parseFloat(
-        this.hass.states[this._config.entities.grid_import_power].state.replace(",", ".")
-      ) || 0;
-    const gridExportPower =
-      parseFloat(
-        this.hass.states[this._config.entities.grid_export_power].state.replace(",", ".")
-      ) || 0;
-    const houseConsumption =
-      parseFloat(
-        this.hass.states[this._config.entities.house_consumption].state.replace(",", ".")
-      ) || 0;
-    const batterySoc =
-      parseFloat(this.hass.states[this._config.entities.battery_soc].state.replace(",", ".")) ||
-      0;
-    const dailyYield =
-      parseFloat(this.hass.states[this._config.entities.daily_yield].state.replace(",", ".")) ||
-      0;
-    const dailyHouseLoad =
-      parseFloat(
-        this.hass.states[this._config.entities.daily_house_load].state.replace(",", ".")
-      ) || 0;
-    const dailyEarnings =
-      parseFloat(
-        this.hass.states[this._config.entities.daily_earnings].state.replace(",", ".")
-      ) || 0;
+    // Check if at least one entity is configured
+    const hasEntities = Object.values(this._config.entities).some(entity => entity && entity.trim() !== "");
+    if (!hasEntities) {
+      return html`
+        <ha-card>
+          <div class="card-content" style="padding: 16px; text-align: center;">
+            <p>Please configure the card entities.</p>
+          </div>
+        </ha-card>
+      `;
+    }
 
-    // Calculate net values for display
+    // Safely get entity states with fallbacks
+    const getEntityValue = (entityId: string): number => {
+      if (!entityId || !this.hass.states[entityId]) {
+        return 0;
+      }
+      const value = parseFloat(this.hass.states[entityId].state.replace(",", "."));
+      return isNaN(value) ? 0 : value;
+    };
+
+    const pvPower = getEntityValue(this._config.entities.pv_power);
+    const batteryDischargePower = getEntityValue(this._config.entities.battery_discharge_power);
+    const batteryChargePower = getEntityValue(this._config.entities.battery_charge_power);
+    const gridImportPower = getEntityValue(this._config.entities.grid_import_power);
+    const gridExportPower = getEntityValue(this._config.entities.grid_export_power);
+    const houseConsumption = getEntityValue(this._config.entities.house_consumption);
+    const batterySoc = getEntityValue(this._config.entities.battery_soc);
+    const dailyYield = getEntityValue(this._config.entities.daily_yield);
+    const dailyHouseLoad = getEntityValue(this._config.entities.daily_house_load);
+    const dailyEarnings = getEntityValue(this._config.entities.daily_earnings);
+
     const batteryPower = batteryDischargePower - batteryChargePower;
     const gridPower = gridImportPower - gridExportPower;
-
     const houseImage = (this.hass.themes as any).darkMode
       ? houseNight
       : houseDay;
+
+    // Energy glow logic
+    const pvFlowActive = pvPower > 10;
+    const houseFlowActive = houseConsumption > 10;
+    const batteryFlowDirection =
+      batteryPower > 10
+        ? "discharging"
+        : batteryPower < -10
+        ? "charging"
+        : "idle";
+    const gridFlowDirection =
+      gridPower > 10 ? "importing" : gridPower < -10 ? "exporting" : "idle";
+
+    // Inverter output power (PV + battery discharge)
+    const inverterOutputPower = pvPower + (batteryFlowDirection === "discharging" ? batteryPower : 0);
+
+    // Check if inverter is supplying power
+    const isInverterSupplyingPower = inverterOutputPower > 10;
+
+    // Check if grid is supplying house
+    const isGridSupplyingHouse = gridFlowDirection === "importing";
+
+    // Check if exporting to grid
+    const isExportingToGrid = gridFlowDirection === "exporting";
+
+    // Flow animation classes
+    const pvFlowClass = pvFlowActive ? "flow-active" : "";
+    const batteryFlowClass =
+      batteryFlowDirection !== "idle"
+        ? `flow-active ${
+            batteryFlowDirection === "charging" ? "flow-reverse" : ""
+          }`
+        : "";
+    
+    // Inverter to junction flow
+    const inverterToJunctionFlowClass = isInverterSupplyingPower ? "flow-active" : "";
+    
+    // Junction to house flow
+    const junctionToHouseFlowClass = houseFlowActive && isInverterSupplyingPower ? "flow-active" : "";
+    
+    // Junction to grid flow (export)
+    const junctionToGridFlowClass = isExportingToGrid ? "flow-active" : "";
+    
+    // Grid to house flow (import)
+    const gridToHouseFlowClass = isGridSupplyingHouse && houseFlowActive ? "flow-active" : "";
+      
 
     return html`
       <ha-card>
         <div class="card-content">
           <div class="pv-circle">
             <span class="value" style="font-size: 2em;"
-              >${(pvPower / 1000).toFixed(2).replace(".", ",")}<span class="unit"> kW</span></span
+              >${(pvPower / 1000).toFixed(2).replace(".", ",")}<span
+                class="unit"
+              >
+                kW</span
+              ></span
             >
             <span
               class="label"
@@ -103,20 +172,53 @@ export class SolarisCard extends LitElement {
           </div>
 
           <div class="house-area">
-            <img
-              src="${houseImage}"
-              alt="House-Visualisation"
-            />
-          </div>
+            <img src="${houseImage}" alt="House-Visualisation" />
+            <div class="flow-container">
+              <img class="inverter-img" src="${inverterImage}" />
+              <img class="battery-img" src="${batteryImage}" />
+              <div class="battery-soc">
+                <ha-icon icon="mdi:lightning-bolt"></ha-icon> ${batterySoc}%
+              </div>
 
+              <svg
+                class="flow-svg"
+                viewBox="0 0 300 220"
+                preserveAspectRatio="xMidYMid meet"
+              >
+                <!-- Static cable paths -->
+                <path class="cable-path" d="M 121 35 L 121 148" /> <!-- PV to inverter -->
+                <path class="cable-path" d="M 83 145 L 118 145" /> <!-- Battery to inverter -->
+                <path class="cable-path" d="M 118 145 L 195 145" /> <!-- Inverter to house -->
+                <path class="cable-path" d="M 150 145 L 150 213" /> <!-- Junction to grid -->
+
+                <!-- Animated flows -->
+                <g> <!-- 1. PV to inverter -->
+                  <path class="flow-pulse ${pvFlowClass}" d="M 121 35 L 121 148" />
+                </g>
+                <g> <!-- 2. Battery to inverter -->
+                  <path class="flow-pulse ${batteryFlowClass}" d="M 83 145 L 118 145" />
+                </g>
+                <g> <!-- 3. Inverter to junction -->
+                  <path class="flow-pulse ${inverterToJunctionFlowClass}" d="M 118 145 L 150 145" />
+                </g>
+                <g> <!-- 4. Junction to house -->
+                  <path class="flow-pulse ${junctionToHouseFlowClass}" d="M 150 145 L 195 145" />
+                </g>
+                <g> <!-- 5. Grid to house (import) -->
+                  <path class="flow-pulse ${gridToHouseFlowClass}" d="M 150 213 L 150 145 L 210 145" />
+                </g>
+                <g> <!-- 6. Junction to grid (export) -->
+                  <path class="flow-pulse ${junctionToGridFlowClass}" d="M 150 145 L 150 213" />
+                </g>
+              </svg>
+            </div>
+          </div>
           <div class="bottom-row">
             <div class="item">
               <span class="value"
-                >${(Math.abs(batteryPower) / 1000).toFixed(2).replace(".", ",")}<span
-                  class="unit"
-                >
-                  kW</span
-                ></span
+                >${(Math.abs(batteryPower) / 1000)
+                  .toFixed(2)
+                  .replace(".", ",")}<span class="unit"> kW</span></span
               >
               <span
                 class="label"
@@ -127,15 +229,17 @@ export class SolarisCard extends LitElement {
             </div>
             <div class="item">
               <span class="value"
-                >${(Math.abs(gridPower) / 1000).toFixed(2).replace(".", ",")}<span class="unit">
-                  kW</span
-                ></span
+                >${(Math.abs(gridPower) / 1000)
+                  .toFixed(2)
+                  .replace(".", ",")}<span class="unit"> kW</span></span
               >
               <span class="label">Netz</span>
             </div>
             <div class="item">
               <span class="value"
-                >${(houseConsumption / 1000).toFixed(2).replace(".", ",")}<span class="unit">
+                >${(houseConsumption / 1000).toFixed(2).replace(".", ",")}<span
+                  class="unit"
+                >
                   kW</span
                 ></span
               >
@@ -169,7 +273,10 @@ export class SolarisCard extends LitElement {
                   class="stats-icon-container"
                   style="background-color: rgba(254, 87, 0, 0.1);"
                 >
-                  <ha-icon icon="mdi:home-lightning-bolt-outline" style="color: #FE5700;"></ha-icon>
+                  <ha-icon
+                    icon="mdi:home-lightning-bolt-outline"
+                    style="color: #FE5700;"
+                  ></ha-icon>
                 </div>
                 <div class="stats-text">
                   <span class="stats-value"
@@ -206,6 +313,30 @@ export class SolarisCard extends LitElement {
   // Define card size for Home Assistant layout
   public getCardSize(): number {
     return 5;
+  }
+
+  // Register the card editor
+  public static getConfigElement() {
+    return document.createElement("solaris-card-editor");
+  }
+
+  // Stub config for the card picker
+  public static getStubConfig() {
+    return {
+      type: "custom:solaris-card",
+      entities: {
+        pv_power: "",
+        battery_discharge_power: "",
+        battery_charge_power: "",
+        grid_import_power: "",
+        grid_export_power: "",
+        house_consumption: "",
+        battery_soc: "",
+        daily_yield: "",
+        daily_house_load: "",
+        daily_earnings: ""
+      }
+    };
   }
 
   // Define card appearance
@@ -248,18 +379,20 @@ export class SolarisCard extends LitElement {
 
     .house-area {
       margin-top: -70px;
-      margin-bottom: -10px;
+      margin-bottom: 0px;
       z-index: 0;
+      width: 100%;
+      max-width: 400px;
+      position: relative;
     }
+
     .house-area img {
       width: 100%;
       height: auto;
       display: block;
       margin: 0 auto;
-      position: relative;
-      left: 50%;
-      transform: translateX(-50%);
     }
+
     .value {
       font-size: 1.7em;
       font-weight: 500;
@@ -272,6 +405,94 @@ export class SolarisCard extends LitElement {
     .label {
       font-size: 1.3em;
       color: var(--secondary-text-color);
+    }
+
+    .flow-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .inverter-img {
+      position: absolute;
+      left: 38%;
+      top: 60%;
+      width: 8% !important;
+      z-index: 10;
+    }
+    .battery-img {
+      position: absolute;
+      left: 19%;
+      top: 60%;
+      width: 12% !important;
+    }
+
+    .battery-soc {
+      position: absolute;
+      left: 19.5%;
+      top: 49%;
+      font-size: 0.85em;
+      font-weight: bold;
+      color: var(--primary-text-color);
+      background-color: rgba(
+        var(--rgb-card-background-color, 255, 255, 255),
+        0.7
+      );
+      padding: 4px 6px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      line-height: 1;
+    }
+    .battery-soc ha-icon {
+      --mdc-icon-size: 14px;
+    }
+
+    .flow-svg {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .cable-path {
+      fill: none;
+      stroke: var(--success-color);
+      stroke-opacity: 0.3;
+      stroke-width: 4;
+      stroke-linecap: round;
+    }
+
+    .flow-pulse {
+      fill: none;
+      stroke: white;
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-dasharray: 10 200;
+      opacity: 0;
+    }
+
+    .flow-pulse.flow-active {
+      opacity: 0.7;
+      animation: flow 3s linear infinite;
+    }
+
+    .flow-pulse.flow-reverse {
+      animation-direction: reverse;
+    }
+
+    @keyframes flow {
+      from {
+        stroke-dashoffset: 0;
+      }
+      to {
+        stroke-dashoffset: -210;
+      }
     }
 
     .bottom-row {
@@ -371,3 +592,13 @@ export class SolarisCard extends LitElement {
     }
   `;
 }
+
+// Register the card in the window object for Home Assistant
+(window as any).customCards = (window as any).customCards || [];
+(window as any).customCards.push({
+  type: "solaris-card",
+  name: "Solaris Energy Card",
+  description: "A modern and fluent energy dashboard card for solar systems",
+  preview: true,
+  documentationURL: "https://github.com/MrAhmalo/Solaris-Energy-Card",
+});
